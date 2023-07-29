@@ -1,0 +1,165 @@
+#!/bin/bash
+
+SEQUENCES=${1:-/mnt/d/input/SARS-CoV-2_sequences.fasta}
+REFERENCES=${2:-/mnt/d/input/SARS-CoV-2_references.fasta}
+METADATA=${3:-/mnt/d/input/SARS-CoV-2_metadata.tsv}
+OUTPUT_DIR=${4:-output}
+THREADS=${5:-12}
+
+extract_orfs() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -name "*.fna" > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/UpDownTools.py extract_orfs -i {} \
+            -o $OUTPUT_DIR/{/.}.fasta" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    }
+
+build_blast_database() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -name "*.fasta" -exec cat {} + > $OUTPUT_DIR/combined.fasta
+    makeblastdb -in $OUTPUT_DIR/combined.fasta -dbtype nucl -out $OUTPUT_DIR/full_db
+    }
+
+split_reference_db() {
+    local FASTA=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    seqkit split -i --by-id-prefix '' --out-dir $OUTPUT_DIR/dna $FASTA
+    }
+
+translate_fasta() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -name "*.fasta" > parallel_input.tmp
+    parallel -j $THREADS \
+        "transeq \
+            -sequence {} \
+            -outseq $OUTPUT_DIR/{/.}.fasta \
+        && sed -i 's/\(_1\)\b//' $OUTPUT_DIR/{/.}.fasta" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    }
+
+reference_blast() {
+    local INPUT_DIR=$1
+    local BLASTDB=$2
+    local OUTPUT_DIR=$3
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -type f > parallel_input.tmp
+    parallel -j 1 \
+        "tblastn -query {} \
+            -db $BLASTDB \
+            -max_target_seqs 100000 \
+            -num_threads=$THREADS \
+            -out $OUTPUT_DIR/{/.}.tsv \
+            -outfmt '6 sseqid qlen length pident'" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    find $OUTPUT_DIR -type f -empty -delete
+    }
+
+collect_homologs() {
+    local INPUT_DIR=$1
+    local INPUT_FILE=$2
+    local REFERENCE_DIR=$3
+    local OUTPUT_DIR=$4
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -type f > parallel_input.tmp
+    parallel -j $THREADS \
+        "cp $REFERENCE_DIR/{/.}.fasta $OUTPUT_DIR/{/.}.fasta && \
+        python scripts/UpDownTools.py collect_homologs -f $INPUT_FILE \
+        -b {} \
+        -o $OUTPUT_DIR/{/.}.fasta" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    find $OUTPUT_DIR -type f -empty -delete   
+    }
+
+msa() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -name "*.fasta" > parallel_input.tmp
+    parallel -j $THREADS \
+        "mafft \
+            --auto \
+            --preservecase \
+            {} \
+            > $OUTPUT_DIR/{/.}.msa" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    }
+
+pal2nal() {
+    local INPUT_DIR=$1
+    local INPUT_DIR2=$2
+    local OUTPUT_DIR=$3
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -name "*.msa" > parallel_input.tmp
+    parallel -j $THREADS \
+        "pal2nal.pl -output fasta {} $INPUT_DIR2/{/.}.fasta > $OUTPUT_DIR/{/.}.fasta" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    }
+
+filter_metadata() {
+    local OUTPUT_DIR=$1
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    cut -f4,8,12,18,28,29,30 $METADATA > $OUTPUT_DIR/filtered_metadata.tsv
+    }
+
+build_metadata_database() {
+    local INPUT_FILE=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    python scripts/database.py build_metadata_database -i $INPUT_FILE -o $OUTPUT_DIR/UpDownSelect.db
+    }
+
+add_alignment_table() {
+    local DATABASE=$1
+    local ALIGNMENT=$2
+    python scripts/database.py add_alignment_table -i $DATABASE -a $ALIGNMENT -t test_table
+    }
+
+dNdS_per_site() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -type f > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/dNdS.py per_site -i {} -o $OUTPUT_DIR/{/.}.tsv" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    }
+
+# extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
+# build_blast_database $OUTPUT_DIR/orfs $OUTPUT_DIR/blastdb
+# split_reference_db $REFERENCES $OUTPUT_DIR/references
+# translate_fasta $OUTPUT_DIR/references/dna $OUTPUT_DIR/references/protein
+# reference_blast $OUTPUT_DIR/references/protein $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/reference_blast
+# collect_homologs $OUTPUT_DIR/reference_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/references/dna $OUTPUT_DIR/homologs
+# translate_fasta $OUTPUT_DIR/homologs $OUTPUT_DIR/translated_homologs
+# msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
+# pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/homologs $OUTPUT_DIR/pal2nal
+# dNdS_per_site $OUTPUT_DIR/pal2nal $OUTPUT_DIR/dNdS_per_site
+# filter_metadata $OUTPUT_DIR/filtered_metadata
+# build_metadata_database $OUTPUT_DIR/filtered_metadata/filtered_metadata.tsv $OUTPUT_DIR/main_database
+add_alignment_table $OUTPUT_DIR/main_database/UpDownSelect.db $OUTPUT_DIR/pal2nal/lcl__NC_045512.2_cds_YP_009724390.1_3.fasta
