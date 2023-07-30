@@ -1,0 +1,23 @@
+name: UpDownSelect
+
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - ncbi-datasets-cli=15.10.0
+  - unzip=6.0
+  - bakta=1.7.0
+  - parallel
+  - emboss=6.6.0
+  - mafft=7.520
+  - pal2nal=14.1
+  - seqkit=2.4.0
+  - rapidnj=2.3.2
+  - hyphy=2.5.14
+  - paml=4.10.6
+  - scipy=1.10.1
+  - pandas=2.0.1
+  - seaborn=0.12.2
+  - ipykernel=6.22.0
