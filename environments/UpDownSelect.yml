@@ -15,7 +15,7 @@ dependencies:
   - pal2nal=14.1
   - seqkit=2.4.0
   - rapidnj=2.3.2
-  - hyphy=2.5.14
+  - hyphy=2.5.50
   - paml=4.10.6
   - scipy=1.10.1
   - pandas=2.0.1

@@ -77,6 +77,7 @@ def transpose(infile):
                 count[item] = 1
         count['---'] = 0
         transpose_dict[i] = list(count.items())
+    print(transpose_dict[473])
 
     return transpose_dict
 
@@ -134,10 +135,9 @@ def per_site(infile, outfile, site_counts, sub_counts, codon_table):
         codon_dict = json.load(infile)
 
     with open(outfile, 'w') as outfile:
-        print('site', 'ref_site', 'ref_codon', 'ref_aa', 'total_subs', 'NS', 'SS', 'N_dev', 'dNdS', file=outfile, sep='\t')
+        print('site', 'ref_site', 'ref_codon', 'ref_aa', 'total_subs', 'NS', 'SS', 'N_dev', 'dNdS', 'chi2_p_value', 'binom_p_value', file=outfile, sep='\t')
         ref_site = -1
         for key, value in transpose_dict.items():
-            print(value)
             ref_codon = value[0][0]
             if ref_codon == '---':
                 most_abundant_codon = value[1][0]
@@ -154,13 +154,21 @@ def per_site(infile, outfile, site_counts, sub_counts, codon_table):
             total_subs = NS + SS
             N_dev = 0
             if total_subs != 0:
-                N_dev = (NS / total_subs - N) * total_subs
+                N_dev = NS - N * total_subs
             try:
                 dNdS = (NS/N)/(SS/S)
             except ZeroDivisionError:
                 dNdS = -1
 
-            print(key, ref_site, ref_codon, codon_dict[ref_codon], total_subs, NS, SS, N_dev, dNdS, file=outfile, sep='\t')
+            chi2_p_value = 1.000
+            binom_p_value = 1.000
+            if total_subs != 0:
+                _ , chi2_p_value = chisquare([NS/total_subs, SS/total_subs], [N, S])
+                chi2_p_value = chi2_p_value
+                binom_results = binomtest(NS, total_subs, N)
+                binom_p_value = binom_results.pvalue
+
+            print(key, ref_site, ref_codon, codon_dict[ref_codon], total_subs, NS, SS, N_dev, dNdS, chi2_p_value, binom_p_value, file=outfile, sep='\t')
 
 def parse_args():
     parser = argparse.ArgumentParser()

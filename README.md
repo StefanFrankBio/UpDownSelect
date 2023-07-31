@@ -9,6 +9,12 @@
 - Write script to impute msa for amiguity handling. Fasta -> Transpose -> Transpose -> Fasta
 
 # UpDownSelect
+## Installation Process
+```bash
+git clone https://github.com/StefanFrankBio/UpDownSelect.git
+micromamba env create -f environments/UpDownSelect.yml
+micromamba activate UpDownSelect
+```
 ## Input Data
 1. fasta file containing nucleotide sequences to be analyzed
 2. reference fasta file containing nucleotide sequences for genes of interest

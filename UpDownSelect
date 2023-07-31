@@ -117,6 +117,103 @@ pal2nal() {
     rm parallel_input.tmp
     }
 
+dNdS_per_site() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -type f > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/dNdS.py per_site -i {} -o $OUTPUT_DIR/{/.}.tsv" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    }
+
+rapidnj() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -type f > parallel_input.tmp
+    parallel -j $THREADS \
+        "echo {} && rapidnj {} \
+        -i fa \
+        -c 1 \
+        -x $OUTPUT_DIR/{/.}.tree \
+        && sed -i 's/'\''//g' $OUTPUT_DIR/{/.}.tree" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    }
+
+fel() {
+    local INPUT_DIR1=$1
+    local INPUT_DIR2=$2
+    local OUTPUT_DIR=$3
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR1 -type f > parallel_input.tmp
+    parallel -j 1 \
+        "hyphy CPU=$THREADS fel \
+            --alignment {} \
+            --tree $INPUT_DIR2/{/.}.tree \
+            --output $OUTPUT_DIR/{/.}.fel" \
+            :::: parallel_input.tmp
+    rm parallel_input.tmp
+}
+
+slac() {
+    local INPUT_DIR1=$1
+    local INPUT_DIR2=$2
+    local OUTPUT_DIR=$3
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR1 -type f > parallel_input.tmp
+    parallel -j 1 \
+        "hyphy CPU=$THREADS slac \
+            --alignment {} \
+            --tree $INPUT_DIR2/{/.}.tree \
+            --output $OUTPUT_DIR/{/.}.slac" \
+            :::: parallel_input.tmp
+    rm parallel_input.tmp
+}
+
+hyphy_per_site() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -type f > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/hyphy_per_site.py \
+        -f output/fel/{/.}.fel \
+        -s output/slac/{/.}.slac \
+        -d {} \
+        -o $OUTPUT_DIR/{/.}.tsv" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+}
+
+# extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
+# build_blast_database $OUTPUT_DIR/orfs $OUTPUT_DIR/blastdb
+# split_reference_db $REFERENCES $OUTPUT_DIR/references
+# translate_fasta $OUTPUT_DIR/references/dna $OUTPUT_DIR/references/protein
+# reference_blast $OUTPUT_DIR/references/protein $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/reference_blast
+# collect_homologs $OUTPUT_DIR/reference_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/references/dna $OUTPUT_DIR/homologs
+# translate_fasta $OUTPUT_DIR/homologs $OUTPUT_DIR/translated_homologs
+# msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
+# pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/homologs $OUTPUT_DIR/pal2nal
+dNdS_per_site $OUTPUT_DIR/pal2nal $OUTPUT_DIR/dNdS_per_site
+# rapidnj $OUTPUT_DIR/pal2nal $OUTPUT_DIR/rapidnj
+# fel $OUTPUT_DIR/pal2nal $OUTPUT_DIR/rapidnj $OUTPUT_DIR/fel
+# slac $OUTPUT_DIR/pal2nal $OUTPUT_DIR/rapidnj $OUTPUT_DIR/slac
+# hyphy_per_site $OUTPUT_DIR/dNdS_per_site $OUTPUT_DIR/hyphy_per_site
+
+
+
+# # filter_metadata $OUTPUT_DIR/filtered_metadata
+# build_metadata_database $OUTPUT_DIR/filtered_metadata/filtered_metadata.tsv $OUTPUT_DIR/main_database
+# add_alignment_table $OUTPUT_DIR/main_database/UpDownSelect.db $OUTPUT_DIR/pal2nal/lcl__NC_045512.2_cds_YP_009724390.1_3.fasta
+
 filter_metadata() {
     local OUTPUT_DIR=$1
     rm -r $OUTPUT_DIR 2> /dev/null
@@ -137,29 +234,3 @@ add_alignment_table() {
     local ALIGNMENT=$2
     python scripts/database.py add_alignment_table -i $DATABASE -a $ALIGNMENT -t test_table
     }
-
-dNdS_per_site() {
-    local INPUT_DIR=$1
-    local OUTPUT_DIR=$2
-    rm -r $OUTPUT_DIR 2> /dev/null
-    mkdir -p $OUTPUT_DIR
-    find $INPUT_DIR -type f > parallel_input.tmp
-    parallel -j $THREADS \
-        "python scripts/dNdS.py per_site -i {} -o $OUTPUT_DIR/{/.}.tsv" \
-        :::: parallel_input.tmp
-    rm parallel_input.tmp
-    }
-
-# extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
-# build_blast_database $OUTPUT_DIR/orfs $OUTPUT_DIR/blastdb
-# split_reference_db $REFERENCES $OUTPUT_DIR/references
-# translate_fasta $OUTPUT_DIR/references/dna $OUTPUT_DIR/references/protein
-# reference_blast $OUTPUT_DIR/references/protein $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/reference_blast
-# collect_homologs $OUTPUT_DIR/reference_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/references/dna $OUTPUT_DIR/homologs
-# translate_fasta $OUTPUT_DIR/homologs $OUTPUT_DIR/translated_homologs
-# msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
-# pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/homologs $OUTPUT_DIR/pal2nal
-# dNdS_per_site $OUTPUT_DIR/pal2nal $OUTPUT_DIR/dNdS_per_site
-# filter_metadata $OUTPUT_DIR/filtered_metadata
-# build_metadata_database $OUTPUT_DIR/filtered_metadata/filtered_metadata.tsv $OUTPUT_DIR/main_database
-add_alignment_table $OUTPUT_DIR/main_database/UpDownSelect.db $OUTPUT_DIR/pal2nal/lcl__NC_045512.2_cds_YP_009724390.1_3.fasta
