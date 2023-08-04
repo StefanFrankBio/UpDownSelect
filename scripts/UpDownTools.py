@@ -51,7 +51,7 @@ def extract_orfs(filepath, count, fasta_out):
             stop_positions = find_substring_indices(sequence)
             stop_positions_by_frame = split_by_modulo(stop_positions)
             stops = match_stop_positions(stop_positions_by_frame)
-            ss_orfs.extend([sequence[x+3:y] for x,y in stops if y-x > 3500])
+            ss_orfs.extend([sequence[x+3:y] for x,y in stops if y-x > 1000])
             for i, s in enumerate(ss_orfs):
                 print(f'{identifier}_{i}', file=file)
                 formatted_sequence = '\n'.join([s[i:i+60] for i in range(0, len(s), 60)])
@@ -90,7 +90,33 @@ def collect_homologs(fasta_in, blast_in, count, fasta_out):
                 if all(base in 'ATGC' for base in sequence):
                     print(identifier.rsplit('_', 1)[0], file=file)
                     formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
-                    print(formatted_sequence, file=file)                
+                    print(formatted_sequence, file=file)
+
+def ava_homologs(fasta_in, blast_in, count, fasta_out):
+    df = pd.read_csv(blast_in, sep="\t", names=["qseqid", "sseqid", "qlen", "length", "pident"])
+    df["len_ident"] = df["length"] / df["qlen"] * df["pident"]
+    df.sort_values("qseqid", inplace=True, ascending=False, ignore_index=True)
+    df = df[df['len_ident'] >= 70]
+
+    buckets = []
+    tracker = []
+    bucket_count = -1
+    for index, row in df.iterrows():
+        if row['qseqid'] not in tracker:
+            buckets.append([row['qseqid']])
+            bucket_count += 1
+            filtered_values = df[df['qseqid'] == row['qseqid']]['sseqid'].to_list()
+            tracker.extend(filtered_values)
+            buckets[bucket_count].extend(filtered_values)
+
+    for i, l in enumerate(buckets):
+        with open(f"{fasta_out}_{i}.fasta", 'w') as file:
+            for identifier, sequence in read_fasta(fasta_in, count):
+                if identifier[1:] in l:
+                    if all(base in 'ATGC' for base in sequence):
+                        print(identifier.rsplit('_', 1)[0], file=file)
+                        formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
+                        print(formatted_sequence, file=file)
 
 
 def parse_args():
@@ -114,6 +140,12 @@ def parse_args():
     collect_homologs_parser.add_argument('-c', '--count', type=int, default=None)
     collect_homologs_parser.add_argument('-o', '--output')
 
+    ava_homologs_parser = subparsers.add_parser('ava_homologs')
+    ava_homologs_parser.add_argument('-f', '--fasta')
+    ava_homologs_parser.add_argument('-b', '--blast')
+    ava_homologs_parser.add_argument('-c', '--count', type=int, default=None)
+    ava_homologs_parser.add_argument('-o', '--output')
+
     return parser.parse_args()
 
 def main():
@@ -124,6 +156,8 @@ def main():
          extract_orfs(args.input, args.count, args.output)
     elif args.command == 'collect_homologs':
          collect_homologs(args.fasta, args.blast, args.count, args.output)
+    elif args.command == 'ava_homologs':
+         ava_homologs(args.fasta, args.blast, args.count, args.output)
 
 if __name__ == '__main__':
     main()
