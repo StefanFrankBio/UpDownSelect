@@ -3,6 +3,8 @@ import hashlib
 import json
 import re
 import pandas as pd
+import numpy as np
+from collections import Counter
 
 def read_fasta(file_path, max_sequences=None):
     with open(file_path, 'r') as file:
@@ -51,7 +53,7 @@ def extract_orfs(filepath, count, fasta_out):
             stop_positions = find_substring_indices(sequence)
             stop_positions_by_frame = split_by_modulo(stop_positions)
             stops = match_stop_positions(stop_positions_by_frame)
-            ss_orfs.extend([sequence[x+3:y] for x,y in stops if y-x > 1000])
+            ss_orfs.extend([sequence[x+3:y] for x,y in stops if y-x > 100])
             for i, s in enumerate(ss_orfs):
                 print(f'{identifier}_{i}', file=file)
                 formatted_sequence = '\n'.join([s[i:i+60] for i in range(0, len(s), 60)])
@@ -94,10 +96,11 @@ def collect_homologs(fasta_in, blast_in, count, fasta_out):
 
 def ava_homologs(fasta_in, blast_in, count, fasta_out):
     df = pd.read_csv(blast_in, sep="\t", names=["qseqid", "sseqid", "qlen", "length", "pident"])
-    df["len_ident"] = df["length"] / df["qlen"] * df["pident"]
-    df.sort_values("qseqid", inplace=True, ascending=False, ignore_index=True)
-    df = df[df['len_ident'] >= 70]
-
+    merged_df = pd.merge(df, df, left_on=['qseqid', 'sseqid'], right_on=['sseqid', 'qseqid'], suffixes=('_left', '_right'))
+    df['slen'] = df['qlen'].where(~df['qseqid'].isin(merged_df['qseqid_left']), merged_df['qlen_right']) 
+    df['qlen_div_slen'] = df['qlen'] / df['slen'] * df["pident"]
+    condition = abs(df['qlen_div_slen'] - 100) <= 30
+    df = df[condition].reset_index(drop=True)
     buckets = []
     tracker = []
     bucket_count = -1
@@ -108,7 +111,11 @@ def ava_homologs(fasta_in, blast_in, count, fasta_out):
             filtered_values = df[df['qseqid'] == row['qseqid']]['sseqid'].to_list()
             tracker.extend(filtered_values)
             buckets[bucket_count].extend(filtered_values)
+        if index == 21:
+            print(row)
 
+    print(buckets[2])
+    print(buckets[1])
     for i, l in enumerate(buckets):
         with open(f"{fasta_out}_{i}.fasta", 'w') as file:
             for identifier, sequence in read_fasta(fasta_in, count):
@@ -118,6 +125,40 @@ def ava_homologs(fasta_in, blast_in, count, fasta_out):
                         formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
                         print(formatted_sequence, file=file)
 
+def ava_homologs(fasta_in, blast_in, count, fasta_out):
+    df = pd.read_csv(blast_in, sep="\t", names=["qseqid", "sseqid", "qlen", "length", "pident"])
+    slen_dict = {(row['qseqid'], row['sseqid']): row['qlen'] for index, row in df.iterrows()}
+    df['slen'] = [slen_dict.get((row['sseqid'], row['qseqid']), None) for index, row in df.iterrows()]
+    x = np.maximum(df['qlen'], df['slen'])
+    df['len_ident'] = (df['length'] / x) * df['pident']
+    df_filtered = df[df['len_ident'] >= 90].copy()
+    # df_filtered['pair'] = df_filtered.apply(lambda row: frozenset([row['qseqid'], row['sseqid']]), axis=1)
+    # df_filtered = df_filtered.drop_duplicates(subset=['pair']).drop(columns=['pair'])
+    result = df_filtered.groupby('qseqid')['sseqid'].apply(list).reset_index(name='sseqid_list')
+    result['sseqid_list'] = result['sseqid_list'].apply(lambda x: sorted(x))
+    result_list_of_lists = result['sseqid_list'].to_list()
+    unique_results = []
+    for result in result_list_of_lists:
+        if result not in unique_results:
+            unique_results.append(result)
+    flattened_list = [item for sublist in unique_results for item in sublist]
+    value_counts = Counter(flattened_list)
+
+
+    for i, result in enumerate(unique_results):
+        if "EPI_ISL_10839377_95" in result:
+            print(result)
+
+    for i, l in enumerate(unique_results):
+        with open(f"{fasta_out}_{i}.fasta", 'w') as file:
+            for identifier, sequence in read_fasta(fasta_in, count):
+                if identifier[1:] in l:
+                    if all(base in 'ATGC' for base in sequence):
+                        print(identifier.rsplit('_', 1)[0], file=file)
+                        formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
+                        print(formatted_sequence, file=file)
+
+    
 
 def parse_args():
     parser = argparse.ArgumentParser()
