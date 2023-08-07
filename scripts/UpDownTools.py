@@ -54,7 +54,9 @@ def extract_orfs(filepath, count, fasta_out):
             stop_positions_by_frame = split_by_modulo(stop_positions)
             stops = match_stop_positions(stop_positions_by_frame)
             ss_orfs.extend([sequence[x+3:y] for x,y in stops if y-x > 100])
-            for i, s in enumerate(ss_orfs):
+            ss_orfs_filtered = filter_amiguity(ss_orfs)
+            
+            for i, s in enumerate(ss_orfs_filtered):
                 print(f'{identifier}_{i}', file=file)
                 formatted_sequence = '\n'.join([s[i:i+60] for i in range(0, len(s), 60)])
                 print(formatted_sequence, file=file)
@@ -78,6 +80,14 @@ def match_stop_positions(lst):
     for i in lst:
         results.extend(list(zip(i, i[1:])))
     return results
+
+def filter_amiguity(sequences):
+    filtered = []
+    for seq in sequences:
+        non_atgc_count = sum(1 for char in seq if char not in 'ATGC')
+        if non_atgc_count / len(seq) <= 0.3:
+            filtered.append(seq)
+    return filtered
 
 def collect_homologs(fasta_in, blast_in, count, fasta_out):
     df = pd.read_csv(blast_in, sep="\t", names=["sseqid", "qlen", "length", "pident"])
@@ -138,16 +148,23 @@ def ava_homologs(fasta_in, blast_in, count, fasta_out):
     result['sseqid_list'] = result['sseqid_list'].apply(lambda x: sorted(x))
     result_list_of_lists = result['sseqid_list'].to_list()
     unique_results = []
-    for result in result_list_of_lists:
-        if result not in unique_results:
-            unique_results.append(result)
-    flattened_list = [item for sublist in unique_results for item in sublist]
-    value_counts = Counter(flattened_list)
+    for r in result_list_of_lists:
+        if r not in unique_results:
+            unique_results.append(r)
+    
+    filtered_results = []
+    for i in range(len(unique_results)):
+        is_subset = False
+        for j in range(len(unique_results)):
+            if i != j and set(unique_results[i]).issubset(set(unique_results[j])):
+                is_subset = True
+                break
+        if not is_subset:
+            filtered_results.append(unique_results[i])
 
-
-    for i, result in enumerate(unique_results):
-        if "EPI_ISL_10839377_95" in result:
-            print(result)
+    # flattened_list = [item for sublist in filtered_results for item in sublist]
+    # value_counts = Counter(flattened_list)
+    # print(value_counts)
 
     for i, l in enumerate(unique_results):
         with open(f"{fasta_out}_{i}.fasta", 'w') as file:
@@ -158,7 +175,16 @@ def ava_homologs(fasta_in, blast_in, count, fasta_out):
                         formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
                         print(formatted_sequence, file=file)
 
-    
+def split_fasta(fasta_in, num_files, count, fasta_out):
+    files = [open(f"{fasta_out}_{i+1}.fasta", 'w') for i in range(num_files)]
+    for i, (identifier, sequence) in enumerate(read_fasta(fasta_in, count)):
+        file_num = i % num_files
+        print(identifier, file=files[file_num])
+        formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
+        print(formatted_sequence, file=files[file_num])
+
+    for file in files:
+        file.close()
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -187,6 +213,12 @@ def parse_args():
     ava_homologs_parser.add_argument('-c', '--count', type=int, default=None)
     ava_homologs_parser.add_argument('-o', '--output')
 
+    split_fasta_parser = subparsers.add_parser('split_fasta')
+    split_fasta_parser.add_argument('-i', '--input')
+    split_fasta_parser.add_argument('-t', '--threads', type=int)
+    split_fasta_parser.add_argument('-c', '--count', type=int, default=None)
+    split_fasta_parser.add_argument('-o', '--output')
+
     return parser.parse_args()
 
 def main():
@@ -199,6 +231,8 @@ def main():
          collect_homologs(args.fasta, args.blast, args.count, args.output)
     elif args.command == 'ava_homologs':
          ava_homologs(args.fasta, args.blast, args.count, args.output)
+    elif args.command == 'split_fasta':
+         split_fasta(args.input, args.threads, args.count, args.output)
 
 if __name__ == '__main__':
     main()

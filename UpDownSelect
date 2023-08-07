@@ -19,6 +19,36 @@ extract_orfs() {
     rm parallel_input.tmp
     }
 
+remove_duplicate_sequences() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -name "*.fasta" > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/UpDownTools.py remove_duplicate_sequences \
+            -i {} \
+            -f $OUTPUT_DIR/{/.}.fasta \
+            -j $OUTPUT_DIR/{/.}.json" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    }
+
+split_fasta() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -name "*.fasta" > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/UpDownTools.py split_fasta \
+            -i {} \
+            -t $THREADS \
+            -o $OUTPUT_DIR/{/.}" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    }
+
 build_blast_database() {
     local INPUT_DIR=$1
     local OUTPUT_DIR=$2
@@ -77,11 +107,11 @@ ava_blast() {
     rm -r $OUTPUT_DIR 2> /dev/null
     mkdir -p $OUTPUT_DIR
     find $INPUT_DIR -type f > parallel_input.tmp
-    parallel -j 1 \
+    parallel -j $THREADS \
         "tblastn -query {} \
             -db $BLASTDB \
             -max_target_seqs 100000 \
-            -num_threads=$THREADS \
+            -num_threads=1 \
             -out $OUTPUT_DIR/{/.}.tsv \
             -outfmt '6 qseqid sseqid qlen length pident'" \
         :::: parallel_input.tmp
@@ -230,13 +260,15 @@ hyphy_per_site() {
 
 ava_analysis() {
     # extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
-    # build_blast_database $OUTPUT_DIR/orfs $OUTPUT_DIR/blastdb
-    # translate_fasta $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/blastdb/combined_aa.fasta
-    # ava_blast $OUTPUT_DIR/blastdb/combined_aa.fasta $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
-    ava_homologs $OUTPUT_DIR/ava_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/ava_homologs
-    translate_fasta $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/translated_homologs
-    msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
-    pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/pal2nal
+    # remove_duplicate_sequences $OUTPUT_DIR/orfs $OUTPUT_DIR/rmdup_orfs
+    # split_fasta $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/split_orfs
+    # build_blast_database $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/blastdb
+    # translate_fasta $OUTPUT_DIR/split_orfs $OUTPUT_DIR/translated_orfs
+    ava_blast $OUTPUT_DIR/translated_orfs $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
+    # ava_homologs $OUTPUT_DIR/ava_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/ava_homologs
+    # translate_fasta $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/translated_homologs
+    # msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
+    # pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/pal2nal
     }
 
 ava_analysis
