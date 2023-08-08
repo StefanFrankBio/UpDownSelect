@@ -46,7 +46,7 @@ def remove_duplicate_sequences(filepath, count, fasta_out, json_out):
     with open(json_out, 'w') as file:
         json.dump(hash_dict, file)
 
-def extract_orfs(filepath, count, fasta_out):
+def extract_orfs(filepath, count, fasta_out, prefix):
     with open(fasta_out, 'w') as file:
         for identifier, sequence in read_fasta(filepath, count):
             ss_orfs = []
@@ -57,7 +57,7 @@ def extract_orfs(filepath, count, fasta_out):
             ss_orfs_filtered = filter_amiguity(ss_orfs)
             
             for i, s in enumerate(ss_orfs_filtered):
-                print(f'{identifier}_{i}', file=file)
+                print(f'>{prefix}{identifier[1:]}_{i}', file=file)
                 formatted_sequence = '\n'.join([s[i:i+60] for i in range(0, len(s), 60)])
                 print(formatted_sequence, file=file)
 
@@ -200,6 +200,7 @@ def parse_args():
     extract_orfs_parser.add_argument('-i', '--input')
     extract_orfs_parser.add_argument('-c', '--count', type=int, default=None)
     extract_orfs_parser.add_argument('-o', '--output')
+    extract_orfs_parser.add_argument('-p', '--prefix', default=None)
 
     collect_homologs_parser = subparsers.add_parser('collect_homologs')
     collect_homologs_parser.add_argument('-f', '--fasta')
@@ -226,7 +227,7 @@ def main():
     if args.command == 'remove_duplicate_sequences':
         remove_duplicate_sequences(args.input, args.count, args.fasta, args.json)
     elif args.command == 'extract_orfs':
-         extract_orfs(args.input, args.count, args.output)
+         extract_orfs(args.input, args.count, args.output, args.prefix)
     elif args.command == 'collect_homologs':
          collect_homologs(args.fasta, args.blast, args.count, args.output)
     elif args.command == 'ava_homologs':

@@ -14,7 +14,8 @@ extract_orfs() {
     find $INPUT_DIR -name "*.fasta" > parallel_input.tmp
     parallel -j $THREADS \
         "python scripts/UpDownTools.py extract_orfs -i {} \
-            -o $OUTPUT_DIR/{/.}.fasta" \
+            -o $OUTPUT_DIR/{/.}.fasta \
+            -p {/.}_" \
         :::: parallel_input.tmp
     rm parallel_input.tmp
     }
@@ -32,6 +33,16 @@ remove_duplicate_sequences() {
             -j $OUTPUT_DIR/{/.}.json" \
         :::: parallel_input.tmp
     rm parallel_input.tmp
+    }
+
+remove_duplicate_sequences() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    cat $INPUT_DIR/*.fasta > combined.tmp
+    python scripts/UpDownTools.py remove_duplicate_sequences -i combined.tmp -f $OUTPUT_DIR/combined.fasta -j $OUTPUT_DIR/combined.json
+    rm combined.tmp
     }
 
 split_fasta() {
@@ -260,11 +271,11 @@ hyphy_per_site() {
 
 ava_analysis() {
     # extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
-    # remove_duplicate_sequences $OUTPUT_DIR/orfs $OUTPUT_DIR/rmdup_orfs
+    remove_duplicate_sequences $OUTPUT_DIR/orfs $OUTPUT_DIR/rmdup_orfs
     # split_fasta $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/split_orfs
     # build_blast_database $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/blastdb
     # translate_fasta $OUTPUT_DIR/split_orfs $OUTPUT_DIR/translated_orfs
-    ava_blast $OUTPUT_DIR/translated_orfs $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
+    # ava_blast $OUTPUT_DIR/translated_orfs $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
     # ava_homologs $OUTPUT_DIR/ava_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/ava_homologs
     # translate_fasta $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/translated_homologs
     # msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
