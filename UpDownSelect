@@ -270,16 +270,16 @@ hyphy_per_site() {
 }
 
 ava_analysis() {
-    # extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
+    extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
     remove_duplicate_sequences $OUTPUT_DIR/orfs $OUTPUT_DIR/rmdup_orfs
-    # split_fasta $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/split_orfs
-    # build_blast_database $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/blastdb
-    # translate_fasta $OUTPUT_DIR/split_orfs $OUTPUT_DIR/translated_orfs
-    # ava_blast $OUTPUT_DIR/translated_orfs $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
-    # ava_homologs $OUTPUT_DIR/ava_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/ava_homologs
-    # translate_fasta $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/translated_homologs
-    # msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
-    # pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/pal2nal
+    split_fasta $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/split_orfs
+    build_blast_database $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/blastdb
+    translate_fasta $OUTPUT_DIR/split_orfs $OUTPUT_DIR/translated_orfs
+    ava_blast $OUTPUT_DIR/translated_orfs $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
+    ava_homologs $OUTPUT_DIR/ava_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/ava_homologs
+    translate_fasta $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/translated_homologs
+    msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
+    pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/pal2nal
     }
 
 ava_analysis
