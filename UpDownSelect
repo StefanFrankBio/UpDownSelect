@@ -132,7 +132,7 @@ ava_blast() {
         :::: parallel_input.tmp
     rm parallel_input.tmp
     find $OUTPUT_DIR -type f -empty -delete
-    }    
+    }  
 
 collect_homologs() {
     local INPUT_DIR=$1
@@ -167,6 +167,17 @@ ava_homologs() {
     rm parallel_input.tmp
     find $OUTPUT_DIR -type f -empty -delete   
     }
+
+ava_homologs() {
+    local INPUT_DIR=$1
+    local INPUT_FILE=$2
+    local OUTPUT_DIR=$3
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    cat $INPUT_DIR/*.tsv > combined.tmp
+    python scripts/UpDownTools.py ava_homologs -f $INPUT_FILE -b combined.tmp -o $OUTPUT_DIR/combined
+    rm combined.tmp
+    }  
 
 msa() {
     local INPUT_DIR=$1

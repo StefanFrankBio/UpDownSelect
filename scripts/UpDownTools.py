@@ -53,7 +53,7 @@ def extract_orfs(filepath, count, fasta_out, prefix):
             stop_positions = find_substring_indices(sequence)
             stop_positions_by_frame = split_by_modulo(stop_positions)
             stops = match_stop_positions(stop_positions_by_frame)
-            ss_orfs.extend([sequence[x+3:y] for x,y in stops if y-x > 300])
+            ss_orfs.extend([sequence[x+3:y] for x,y in stops if y-x > 3000])
             ss_orfs_filtered = filter_amiguity(ss_orfs)
             
             for i, s in enumerate(ss_orfs_filtered):
