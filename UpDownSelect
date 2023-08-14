@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=200
 #SBATCH --mem-per-cpu=1G
 
-SEQUENCES=${1:-/mnt/d/input/SARS-CoV-2_sequences.fasta}
+SEQUENCES=${1:-input}
 REFERENCES=${2:-/mnt/d/input/SARS-CoV-2_references.fasta}
 METADATA=${3:-/mnt/d/input/SARS-CoV-2_metadata.tsv}
 OUTPUT_DIR=${4:-output}
@@ -20,21 +20,6 @@ extract_orfs() {
         "python scripts/UpDownTools.py extract_orfs -i {} \
             -o $OUTPUT_DIR/{/.}.fasta \
             -p {/.}_" \
-        :::: parallel_input.tmp
-    rm parallel_input.tmp
-    }
-
-remove_duplicate_sequences() {
-    local INPUT_DIR=$1
-    local OUTPUT_DIR=$2
-    rm -r $OUTPUT_DIR 2> /dev/null
-    mkdir -p $OUTPUT_DIR
-    find $INPUT_DIR -name "*.fasta" > parallel_input.tmp
-    parallel -j $THREADS \
-        "python scripts/UpDownTools.py remove_duplicate_sequences \
-            -i {} \
-            -f $OUTPUT_DIR/{/.}.fasta \
-            -j $OUTPUT_DIR/{/.}.json" \
         :::: parallel_input.tmp
     rm parallel_input.tmp
     }
@@ -158,22 +143,6 @@ ava_homologs() {
     local OUTPUT_DIR=$3
     rm -r $OUTPUT_DIR 2> /dev/null
     mkdir -p $OUTPUT_DIR
-    find $INPUT_DIR -type f > parallel_input.tmp
-    parallel -j $THREADS \
-        "python scripts/UpDownTools.py ava_homologs -f $INPUT_FILE \
-        -b {} \
-        -o $OUTPUT_DIR/{/.}" \
-        :::: parallel_input.tmp
-    rm parallel_input.tmp
-    find $OUTPUT_DIR -type f -empty -delete   
-    }
-
-ava_homologs() {
-    local INPUT_DIR=$1
-    local INPUT_FILE=$2
-    local OUTPUT_DIR=$3
-    rm -r $OUTPUT_DIR 2> /dev/null
-    mkdir -p $OUTPUT_DIR
     cat $INPUT_DIR/*.tsv > combined.tmp
     python scripts/UpDownTools.py ava_homologs -f $INPUT_FILE -b combined.tmp -o $OUTPUT_DIR/combined
     rm combined.tmp
@@ -285,16 +254,17 @@ hyphy_per_site() {
 }
 
 ava_analysis() {
-    extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
-    remove_duplicate_sequences $OUTPUT_DIR/orfs $OUTPUT_DIR/rmdup_orfs
-    split_fasta $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/split_orfs
-    build_blast_database $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/blastdb
-    translate_fasta $OUTPUT_DIR/split_orfs $OUTPUT_DIR/translated_orfs
-    ava_blast $OUTPUT_DIR/translated_orfs $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
-    ava_homologs $OUTPUT_DIR/ava_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/ava_homologs
-    translate_fasta $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/translated_homologs
-    msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
-    pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/pal2nal
+    # extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
+    # remove_duplicate_sequences $OUTPUT_DIR/orfs $OUTPUT_DIR/rmdup_orfs
+    # split_fasta $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/split_orfs
+    # build_blast_database $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/blastdb
+    # translate_fasta $OUTPUT_DIR/split_orfs $OUTPUT_DIR/translated_orfs
+    # ava_blast $OUTPUT_DIR/translated_orfs $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
+    # ava_homologs $OUTPUT_DIR/ava_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/ava_homologs
+    # translate_fasta $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/translated_homologs
+    # msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
+    # pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/pal2nal
+    dNdS_per_site $OUTPUT_DIR/pal2nal $OUTPUT_DIR/dNdS_per_site
     }
 
 ava_analysis
@@ -343,4 +313,35 @@ add_alignment_table() {
     local DATABASE=$1
     local ALIGNMENT=$2
     python scripts/database.py add_alignment_table -i $DATABASE -a $ALIGNMENT -t test_table
+    }
+
+ava_homologs() {
+    local INPUT_DIR=$1
+    local INPUT_FILE=$2
+    local OUTPUT_DIR=$3
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -type f > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/UpDownTools.py ava_homologs -f $INPUT_FILE \
+        -b {} \
+        -o $OUTPUT_DIR/{/.}" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
+    find $OUTPUT_DIR -type f -empty -delete   
+    }
+
+remove_duplicate_sequences() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -name "*.fasta" > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/UpDownTools.py remove_duplicate_sequences \
+            -i {} \
+            -f $OUTPUT_DIR/{/.}.fasta \
+            -j $OUTPUT_DIR/{/.}.json" \
+        :::: parallel_input.tmp
+    rm parallel_input.tmp
     }

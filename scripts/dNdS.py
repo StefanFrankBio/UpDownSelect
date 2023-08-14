@@ -77,7 +77,6 @@ def transpose(infile):
                 count[item] = 1
         count['---'] = 0
         transpose_dict[i] = list(count.items())
-    print(transpose_dict[473])
 
     return transpose_dict
 

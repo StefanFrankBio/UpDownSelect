@@ -46,9 +46,9 @@ def remove_duplicate_sequences(filepath, count, fasta_out, json_out):
     with open(json_out, 'w') as file:
         json.dump(hash_dict, file)
 
-def extract_orfs(filepath, count, fasta_out, prefix):
+def extract_orfs(fasta_in, count, fasta_out, prefix):
     with open(fasta_out, 'w') as file:
-        for identifier, sequence in read_fasta(filepath, count):
+        for identifier, sequence in read_fasta(fasta_in, count):
             ss_orfs = []
             stop_positions = find_substring_indices(sequence)
             stop_positions_by_frame = split_by_modulo(stop_positions)
@@ -106,44 +106,11 @@ def collect_homologs(fasta_in, blast_in, count, fasta_out):
 
 def ava_homologs(fasta_in, blast_in, count, fasta_out):
     df = pd.read_csv(blast_in, sep="\t", names=["qseqid", "sseqid", "qlen", "length", "pident"])
-    merged_df = pd.merge(df, df, left_on=['qseqid', 'sseqid'], right_on=['sseqid', 'qseqid'], suffixes=('_left', '_right'))
-    df['slen'] = df['qlen'].where(~df['qseqid'].isin(merged_df['qseqid_left']), merged_df['qlen_right']) 
-    df['qlen_div_slen'] = df['qlen'] / df['slen'] * df["pident"]
-    condition = abs(df['qlen_div_slen'] - 100) <= 30
-    df = df[condition].reset_index(drop=True)
-    buckets = []
-    tracker = []
-    bucket_count = -1
-    for index, row in df.iterrows():
-        if row['qseqid'] not in tracker:
-            buckets.append([row['qseqid']])
-            bucket_count += 1
-            filtered_values = df[df['qseqid'] == row['qseqid']]['sseqid'].to_list()
-            tracker.extend(filtered_values)
-            buckets[bucket_count].extend(filtered_values)
-        if index == 21:
-            print(row)
-
-    print(buckets[2])
-    print(buckets[1])
-    for i, l in enumerate(buckets):
-        with open(f"{fasta_out}_{i}.fasta", 'w') as file:
-            for identifier, sequence in read_fasta(fasta_in, count):
-                if identifier[1:] in l:
-                    if all(base in 'ATGC' for base in sequence):
-                        print(identifier.rsplit('_', 1)[0], file=file)
-                        formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
-                        print(formatted_sequence, file=file)
-
-def ava_homologs(fasta_in, blast_in, count, fasta_out):
-    df = pd.read_csv(blast_in, sep="\t", names=["qseqid", "sseqid", "qlen", "length", "pident"])
     slen_dict = {(row['qseqid'], row['sseqid']): row['qlen'] for index, row in df.iterrows()}
     df['slen'] = [slen_dict.get((row['sseqid'], row['qseqid']), None) for index, row in df.iterrows()]
     x = np.maximum(df['qlen'], df['slen'])
     df['len_ident'] = (df['length'] / x) * df['pident']
     df_filtered = df[df['len_ident'] >= 90].copy()
-    # df_filtered['pair'] = df_filtered.apply(lambda row: frozenset([row['qseqid'], row['sseqid']]), axis=1)
-    # df_filtered = df_filtered.drop_duplicates(subset=['pair']).drop(columns=['pair'])
     result = df_filtered.groupby('qseqid')['sseqid'].apply(list).reset_index(name='sseqid_list')
     result['sseqid_list'] = result['sseqid_list'].apply(lambda x: sorted(x))
     result_list_of_lists = result['sseqid_list'].to_list()
@@ -162,18 +129,14 @@ def ava_homologs(fasta_in, blast_in, count, fasta_out):
         if not is_subset:
             filtered_results.append(unique_results[i])
 
-    # flattened_list = [item for sublist in filtered_results for item in sublist]
-    # value_counts = Counter(flattened_list)
-    # print(value_counts)
-
     for i, l in enumerate(unique_results):
         with open(f"{fasta_out}_{i}.fasta", 'w') as file:
             for identifier, sequence in read_fasta(fasta_in, count):
                 if identifier[1:] in l:
-                    if all(base in 'ATGC' for base in sequence):
-                        print(identifier.rsplit('_', 1)[0], file=file)
-                        formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
-                        print(formatted_sequence, file=file)
+                    # if all(base in 'ATGC' for base in sequence):
+                    print(identifier.rsplit('_', 1)[0], file=file)
+                    formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
+                    print(formatted_sequence, file=file)
 
 def split_fasta(fasta_in, num_files, count, fasta_out):
     files = [open(f"{fasta_out}_{i+1}.fasta", 'w') for i in range(num_files)]
@@ -185,6 +148,10 @@ def split_fasta(fasta_in, num_files, count, fasta_out):
 
     for file in files:
         file.close()
+
+def fasta_stats(fasta_in, count):
+    for identifier, sequence in read_fasta(fasta_in, count):
+        print(identifier, sum(1 for char in sequence if char not in ['A', 'T', 'G', 'C']))
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -220,6 +187,10 @@ def parse_args():
     split_fasta_parser.add_argument('-c', '--count', type=int, default=None)
     split_fasta_parser.add_argument('-o', '--output')
 
+    fasta_stats_parser = subparsers.add_parser('fasta_stats')
+    fasta_stats_parser.add_argument('-i', '--input')
+    fasta_stats_parser.add_argument('-c', '--count', type=int, default=None)
+
     return parser.parse_args()
 
 def main():
@@ -234,6 +205,8 @@ def main():
          ava_homologs(args.fasta, args.blast, args.count, args.output)
     elif args.command == 'split_fasta':
          split_fasta(args.input, args.threads, args.count, args.output)
+    elif args.command == 'fasta_stats':
+         fasta_stats(args.input, args.count)
 
 if __name__ == '__main__':
     main()
