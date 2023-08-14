@@ -5,6 +5,10 @@ import re
 import pandas as pd
 import numpy as np
 from collections import Counter
+from contextlib import ExitStack
+
+MIN_ORF_LENGTH = 3000
+FASTA_LINE_LENGTH = 60
 
 def read_fasta(file_path, max_sequences=None):
     with open(file_path, 'r') as file:
@@ -17,7 +21,6 @@ def read_fasta(file_path, max_sequences=None):
                 if identifier is not None:
                     yield identifier, ''.join(sequence)
                     count += 1
-                    print(f'Read {count} sequences so far')
                     if max_sequences is not None and count >= max_sequences:
                         break
                 identifier = line
@@ -27,24 +30,26 @@ def read_fasta(file_path, max_sequences=None):
         if identifier is not None and (max_sequences is None or count < max_sequences):
             yield identifier, ''.join(sequence)
             count += 1
-            print(f'Read {count} sequences in total')
 
 def remove_duplicate_sequences(filepath, count, fasta_out, json_out):
     hash_dict = {}
+    duplicate_count = 0
     with open(fasta_out, 'w') as file:
         for identifier, sequence in read_fasta(filepath, count):
             hash = hashlib.sha256(sequence.encode()).hexdigest()
             if hash not in hash_dict:
                 print(identifier, file=file)
-                formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
+                formatted_sequence = '\n'.join([sequence[i:i+FASTA_LINE_LENGTH] for i in range(0, len(sequence), FASTA_LINE_LENGTH)])
                 print(formatted_sequence, file=file)
                 hash_dict[hash] = [identifier]
             else:
                 hash_dict[hash].append(identifier)
+                duplicate_count += 1
     
     hash_dict = {v[0]: v[1:] for k, v in hash_dict.items()}
     with open(json_out, 'w') as file:
         json.dump(hash_dict, file)
+    print(f"Removed {duplicate_count} duplicate sequences.")
 
 def extract_orfs(fasta_in, count, fasta_out, prefix):
     with open(fasta_out, 'w') as file:
@@ -53,12 +58,12 @@ def extract_orfs(fasta_in, count, fasta_out, prefix):
             stop_positions = find_substring_indices(sequence)
             stop_positions_by_frame = split_by_modulo(stop_positions)
             stops = match_stop_positions(stop_positions_by_frame)
-            ss_orfs.extend([sequence[x+3:y] for x,y in stops if y-x > 3000])
+            ss_orfs.extend([sequence[x+3:y] for x,y in stops if y-x > MIN_ORF_LENGTH])
             ss_orfs_filtered = filter_amiguity(ss_orfs)
             
             for i, s in enumerate(ss_orfs_filtered):
                 print(f'>{prefix}{identifier[1:]}_{i}', file=file)
-                formatted_sequence = '\n'.join([s[i:i+60] for i in range(0, len(s), 60)])
+                formatted_sequence = '\n'.join([s[i:i+FASTA_LINE_LENGTH] for i in range(0, len(s), FASTA_LINE_LENGTH)])
                 print(formatted_sequence, file=file)
 
 def find_substring_indices(seq):
@@ -101,7 +106,7 @@ def collect_homologs(fasta_in, blast_in, count, fasta_out):
             if identifier[1:] in seq_ids:
                 if all(base in 'ATGC' for base in sequence):
                     print(identifier.rsplit('_', 1)[0], file=file)
-                    formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
+                    formatted_sequence = '\n'.join([sequence[i:i+FASTA_LINE_LENGTH] for i in range(0, len(sequence), FASTA_LINE_LENGTH)])
                     print(formatted_sequence, file=file)
 
 def ava_homologs(fasta_in, blast_in, count, fasta_out):
@@ -110,7 +115,7 @@ def ava_homologs(fasta_in, blast_in, count, fasta_out):
     df['slen'] = [slen_dict.get((row['sseqid'], row['qseqid']), None) for index, row in df.iterrows()]
     x = np.maximum(df['qlen'], df['slen'])
     df['len_ident'] = (df['length'] / x) * df['pident']
-    df_filtered = df[df['len_ident'] >= 90].copy()
+    df_filtered = df[df['len_ident'] >= 70].copy()
     result = df_filtered.groupby('qseqid')['sseqid'].apply(list).reset_index(name='sseqid_list')
     result['sseqid_list'] = result['sseqid_list'].apply(lambda x: sorted(x))
     result_list_of_lists = result['sseqid_list'].to_list()
@@ -135,19 +140,19 @@ def ava_homologs(fasta_in, blast_in, count, fasta_out):
                 if identifier[1:] in l:
                     # if all(base in 'ATGC' for base in sequence):
                     print(identifier.rsplit('_', 1)[0], file=file)
-                    formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
+                    formatted_sequence = '\n'.join([sequence[i:i+FASTA_LINE_LENGTH] for i in range(0, len(sequence), FASTA_LINE_LENGTH)])
                     print(formatted_sequence, file=file)
 
 def split_fasta(fasta_in, num_files, count, fasta_out):
-    files = [open(f"{fasta_out}_{i+1}.fasta", 'w') for i in range(num_files)]
-    for i, (identifier, sequence) in enumerate(read_fasta(fasta_in, count)):
-        file_num = i % num_files
-        print(identifier, file=files[file_num])
-        formatted_sequence = '\n'.join([sequence[i:i+60] for i in range(0, len(sequence), 60)])
-        print(formatted_sequence, file=files[file_num])
-
-    for file in files:
-        file.close()
+    with ExitStack() as stack:
+        files = [stack.enter_context(open(f"{fasta_out}_{i+1}.fasta", 'w')) for i in range(num_files)]
+        
+        for seq_num, (identifier, sequence) in enumerate(read_fasta(fasta_in, count)):
+            target_file = files[seq_num % num_files]
+            print(identifier, file=target_file)
+            
+            formatted_sequence = '\n'.join([sequence[j:j+FASTA_LINE_LENGTH] for j in range(0, len(sequence), FASTA_LINE_LENGTH)])
+            print(formatted_sequence, file=target_file)
 
 def fasta_stats(fasta_in, count):
     for identifier, sequence in read_fasta(fasta_in, count):

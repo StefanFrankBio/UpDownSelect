@@ -7,6 +7,7 @@
 - multiple substitutions at the same codon lead to weird behavior, investigate
 - How can I make ambiguous not count towards indentity? Should be filtered
 - Write script to impute msa for amiguity handling. Fasta -> Transpose -> Transpose -> Fasta
+- Remove percent identity 'magic number' in ava_homologs
 
 # UpDownSelect
 ## Installation Process
