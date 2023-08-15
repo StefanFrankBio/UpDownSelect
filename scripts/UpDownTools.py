@@ -7,7 +7,7 @@ import numpy as np
 from collections import Counter
 from contextlib import ExitStack
 
-MIN_ORF_LENGTH = 3000
+MIN_ORF_LENGTH = 300
 FASTA_LINE_LENGTH = 60
 
 def read_fasta(file_path, max_sequences=None):
@@ -139,7 +139,8 @@ def ava_homologs(fasta_in, blast_in, count, fasta_out):
             for identifier, sequence in read_fasta(fasta_in, count):
                 if identifier[1:] in l:
                     # if all(base in 'ATGC' for base in sequence):
-                    print(identifier.rsplit('_', 1)[0], file=file)
+                    # print(identifier.rsplit('_', 1)[0], file=file)
+                    print(identifier, file=file)
                     formatted_sequence = '\n'.join([sequence[i:i+FASTA_LINE_LENGTH] for i in range(0, len(sequence), FASTA_LINE_LENGTH)])
                     print(formatted_sequence, file=file)
 
@@ -157,6 +158,21 @@ def split_fasta(fasta_in, num_files, count, fasta_out):
 def fasta_stats(fasta_in, count):
     for identifier, sequence in read_fasta(fasta_in, count):
         print(identifier, sum(1 for char in sequence if char not in ['A', 'T', 'G', 'C']))
+
+def restore_duplicates(fasta_in, count, json_in, fasta_out):
+    with open(json_in) as file:
+        duplicates = json.load(file)
+    
+    with open(fasta_out, 'w') as file:
+        for identifier, sequence in read_fasta(filepath, count):
+            for duplicate in duplicates[identifier]:
+                print(duplicate, file=file)
+                formatted_sequence = '\n'.join([sequence[j:j+FASTA_LINE_LENGTH] for j in range(0, len(sequence), FASTA_LINE_LENGTH)])
+                print(formatted_sequence, file=file)
+
+
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -196,6 +212,12 @@ def parse_args():
     fasta_stats_parser.add_argument('-i', '--input')
     fasta_stats_parser.add_argument('-c', '--count', type=int, default=None)
 
+    restore_duplicate_sequences_parser = subparsers.add_parser('restore_duplicate_sequences')
+    restore_duplicate_sequences_parser.add_argument('-i', '--input')
+    restore_duplicate_sequences_parser.add_argument('-c', '--count', type=int, default=None)
+    restore_duplicate_sequences_parser.add_argument('-j', '--json')
+    restore_duplicate_sequences_parser.add_argument('-o', '--output')
+
     return parser.parse_args()
 
 def main():
@@ -210,6 +232,8 @@ def main():
          ava_homologs(args.fasta, args.blast, args.count, args.output)
     elif args.command == 'split_fasta':
          split_fasta(args.input, args.threads, args.count, args.output)
+    elif args.command == 'fasta_stats':
+         fasta_stats(args.input, args.count)
     elif args.command == 'fasta_stats':
          fasta_stats(args.input, args.count)
 

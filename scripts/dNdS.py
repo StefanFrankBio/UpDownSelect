@@ -81,12 +81,12 @@ def transpose(infile):
     return transpose_dict
 
 def consensus(transpose_dict, outfile=False):
+    transpose_dict = {key: sorted(value, key=lambda x: x[1], reverse=True) for key, value in transpose_dict.items()}
     consensus = ''.join([val[0][0] for val in transpose_dict.values()])
     consensus = Seq(consensus)
     consensus = SeqRecord(consensus, id='consensus', description='')
     if outfile:
-        with open("output.fasta", "w") as output_file:
-            SeqIO.write(consensus, outfile, "fasta")
+        SeqIO.write(consensus, outfile, "fasta")
     else:
         return consensus
 

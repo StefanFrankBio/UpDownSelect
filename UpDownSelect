@@ -255,18 +255,48 @@ hyphy_per_site() {
     rm parallel_input.tmp
 }
 
+build_consensus() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -type f > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/dNdS.py consensus \
+            -i {} \
+            -o $OUTPUT_DIR/{/.}.tmp && \
+        cat $OUTPUT_DIR/{/.}.tmp {} > $OUTPUT_DIR/{/.}.fasta" \
+        :::: parallel_input.tmp
+    rm $OUTPUT_DIR/*.tmp
+    rm parallel_input.tmp
+}
+
+restore_duplicate_sequences() {
+    local INPUT_DIR=$1
+    local OUTPUT_DIR=$2
+    local DUPS_JSON=$3
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR -type f > parallel_input.tmp
+    parallel -j $THREADS \
+        "python scripts/UpDownTools.py restore_duplicate_sequences -i {} -j $DUPS_JSON -o $OUTPUT_DIR/{/.}.fasta" :::: parallel_input.tmp
+        rm parallel_input.tmp
+    }
+
 ava_analysis() {
-    time extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
-    time remove_duplicate_sequences $OUTPUT_DIR/orfs $OUTPUT_DIR/rmdup_orfs
-    time split_fasta $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/split_orfs
-    time build_blast_database $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/blastdb
-    time translate_fasta $OUTPUT_DIR/split_orfs $OUTPUT_DIR/translated_orfs
-    time ava_blast $OUTPUT_DIR/translated_orfs $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
-    time ava_homologs $OUTPUT_DIR/ava_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/ava_homologs
-    time translate_fasta $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/translated_homologs
-    time msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
-    time pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/pal2nal
-    dNdS_per_site $OUTPUT_DIR/pal2nal $OUTPUT_DIR/dNdS_per_site
+    # time extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
+    # time remove_duplicate_sequences $OUTPUT_DIR/orfs $OUTPUT_DIR/rmdup_orfs
+    # time split_fasta $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/split_orfs
+    # time build_blast_database $OUTPUT_DIR/rmdup_orfs $OUTPUT_DIR/blastdb
+    # time translate_fasta $OUTPUT_DIR/split_orfs $OUTPUT_DIR/translated_orfs
+    # time ava_blast $OUTPUT_DIR/translated_orfs $OUTPUT_DIR/blastdb/full_db $OUTPUT_DIR/ava_blast
+    # time ava_homologs $OUTPUT_DIR/ava_blast $OUTPUT_DIR/blastdb/combined.fasta $OUTPUT_DIR/ava_homologs
+    # time translate_fasta $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/translated_homologs
+    # time msa $OUTPUT_DIR/translated_homologs $OUTPUT_DIR/msa
+    # time pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/pal2nal
+    # time build_consensus $OUTPUT_DIR/pal2nal $OUTPUT_DIR/consensus
+    # time dNdS_per_site $OUTPUT_DIR/consensus $OUTPUT_DIR/dNdS_per_site
+    time restore_duplicate_sequences $OUTPUT_DIR/pal2nal $OUTPUT_DIR/restored_dups $OUTPUT_DIR/rmdup_orfs/combined.json
     }
 
 ava_analysis
