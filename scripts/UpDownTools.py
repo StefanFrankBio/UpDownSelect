@@ -159,20 +159,24 @@ def fasta_stats(fasta_in, count):
     for identifier, sequence in read_fasta(fasta_in, count):
         print(identifier, sum(1 for char in sequence if char not in ['A', 'T', 'G', 'C']))
 
-def restore_duplicates(fasta_in, count, json_in, fasta_out):
+def restore_duplicate_sequences(fasta_in, count, json_in, fasta_out):
     with open(json_in) as file:
         duplicates = json.load(file)
     
     with open(fasta_out, 'w') as file:
-        for identifier, sequence in read_fasta(filepath, count):
+        for identifier, sequence in read_fasta(fasta_in, count):
             for duplicate in duplicates[identifier]:
                 print(duplicate, file=file)
                 formatted_sequence = '\n'.join([sequence[j:j+FASTA_LINE_LENGTH] for j in range(0, len(sequence), FASTA_LINE_LENGTH)])
                 print(formatted_sequence, file=file)
 
-
-
-
+def remove_gaps(fasta_in, count, fasta_out):
+    with open(fasta_out, 'w') as file:
+        for identifier, sequence in read_fasta(fasta_in, count):
+            sequence = sequence.replace('-', '').upper()
+            print(identifier, file=file)
+            formatted_sequence = '\n'.join([sequence[j:j+FASTA_LINE_LENGTH] for j in range(0, len(sequence), FASTA_LINE_LENGTH)])
+            print(formatted_sequence, file=file)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -218,6 +222,11 @@ def parse_args():
     restore_duplicate_sequences_parser.add_argument('-j', '--json')
     restore_duplicate_sequences_parser.add_argument('-o', '--output')
 
+    remove_gaps_parser = subparsers.add_parser('remove_gaps')
+    remove_gaps_parser.add_argument('-i', '--input')
+    remove_gaps_parser.add_argument('-c', '--count', type=int, default=None)
+    remove_gaps_parser.add_argument('-o', '--output')
+
     return parser.parse_args()
 
 def main():
@@ -234,8 +243,10 @@ def main():
          split_fasta(args.input, args.threads, args.count, args.output)
     elif args.command == 'fasta_stats':
          fasta_stats(args.input, args.count)
-    elif args.command == 'fasta_stats':
-         fasta_stats(args.input, args.count)
+    elif args.command == 'restore_duplicate_sequences':
+         restore_duplicate_sequences(args.input, args.count, args.json, args.output)
+    elif args.command == 'remove_gaps':
+         remove_gaps(args.input, args.count, args.output)
 
 if __name__ == '__main__':
     main()

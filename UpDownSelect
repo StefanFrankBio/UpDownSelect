@@ -279,9 +279,29 @@ restore_duplicate_sequences() {
     mkdir -p $OUTPUT_DIR
     find $INPUT_DIR -type f > parallel_input.tmp
     parallel -j $THREADS \
-        "python scripts/UpDownTools.py restore_duplicate_sequences -i {} -j $DUPS_JSON -o $OUTPUT_DIR/{/.}.fasta" :::: parallel_input.tmp
-        rm parallel_input.tmp
+        "python scripts/UpDownTools.py restore_duplicate_sequences -i {} -j $DUPS_JSON -o $OUTPUT_DIR/{/.}.tmp \
+        && cat {} $OUTPUT_DIR/{/.}.tmp > $OUTPUT_DIR/{/.}.fasta" :::: parallel_input.tmp
+    rm $OUTPUT_DIR/*.tmp
+    rm parallel_input.tmp
     }
+
+build_ranking_table() {
+    local INPUT_DIR1=$1
+    local INPUT_DIR2=$2
+    local OUTPUT_DIR=$3
+    rm -r $OUTPUT_DIR 2> /dev/null
+    mkdir -p $OUTPUT_DIR
+    find $INPUT_DIR1 -type f > parallel_input.tmp
+    while read -r filename; do
+        base_name_with_ext=$(basename "$filename")
+        base_name="${base_name_with_ext%.*}" 
+        grep -c '>' $INPUT_DIR2/$base_name.fasta
+    done < parallel_input.tmp > parallel_input2.tmp
+    paste parallel_input.tmp parallel_input2.tmp > combined.tmp
+    python test.py combined.tmp
+    rm *.tmp
+
+}
 
 ava_analysis() {
     # time extract_orfs $SEQUENCES $OUTPUT_DIR/orfs
@@ -296,7 +316,14 @@ ava_analysis() {
     # time pal2nal $OUTPUT_DIR/msa $OUTPUT_DIR/ava_homologs $OUTPUT_DIR/pal2nal
     # time build_consensus $OUTPUT_DIR/pal2nal $OUTPUT_DIR/consensus
     # time dNdS_per_site $OUTPUT_DIR/consensus $OUTPUT_DIR/dNdS_per_site
-    time restore_duplicate_sequences $OUTPUT_DIR/pal2nal $OUTPUT_DIR/restored_dups $OUTPUT_DIR/rmdup_orfs/combined.json
+    # time restore_duplicate_sequences $OUTPUT_DIR/pal2nal $OUTPUT_DIR/restored_dups $OUTPUT_DIR/rmdup_orfs/combined.json
+    # time remove_gaps $OUTPUT_DIR/pal2nal $OUTPUT_DIR/NGO_without_gaps
+
+
+    # time restore_duplicate_sequences $OUTPUT_DIR/pal2nal $OUTPUT_DIR/restored_dups $OUTPUT_DIR/rmdup_orfs/combined.json
+    # time build_consensus $OUTPUT_DIR/restored_dups $OUTPUT_DIR/consensus
+    # time dNdS_per_site $OUTPUT_DIR/consensus $OUTPUT_DIR/dNdS_per_site
+    build_ranking_table $OUTPUT_DIR/dNdS_per_site $OUTPUT_DIR/restored_dups $OUTPUT_DIR/ranking_table
     }
 
 ava_analysis
@@ -363,17 +390,14 @@ ava_homologs() {
     find $OUTPUT_DIR -type f -empty -delete   
     }
 
-remove_duplicate_sequences() {
+remove_gaps() {
     local INPUT_DIR=$1
     local OUTPUT_DIR=$2
     rm -r $OUTPUT_DIR 2> /dev/null
     mkdir -p $OUTPUT_DIR
-    find $INPUT_DIR -name "*.fasta" > parallel_input.tmp
+    find $INPUT_DIR -type f > parallel_input.tmp
     parallel -j $THREADS \
-        "python scripts/UpDownTools.py remove_duplicate_sequences \
-            -i {} \
-            -f $OUTPUT_DIR/{/.}.fasta \
-            -j $OUTPUT_DIR/{/.}.json" \
-        :::: parallel_input.tmp
+        "python scripts/UpDownTools.py remove_gaps -i {} -o $OUTPUT_DIR/{/.}.fasta" :::: parallel_input.tmp
     rm parallel_input.tmp
     }
+

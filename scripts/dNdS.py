@@ -139,6 +139,7 @@ def per_site(infile, outfile, site_counts, sub_counts, codon_table):
         for key, value in transpose_dict.items():
             ref_codon = value[0][0]
             if ref_codon == '---':
+                print(value)
                 most_abundant_codon = value[1][0]
             else:
                 ref_site += 1
